@@ -47,3 +47,9 @@ example
 
 # scratch
 scratch/
+
+# Android APK files
+*.apk
+
+# Android App Bundles
+*.aab
