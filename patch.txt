@@ -1,0 +1,42 @@
+  const [printerConnecting, setPrinterConnecting] = useState(false);
+  const [printerStatus, setPrinterStatus] = useState<'Disconnected' | 'Connected'>('Disconnected');
+
+  const handleConnectPrinter = async () => {
+    setPrinterConnecting(true);
+    try {
+      const printer = PrinterManager.getInstance(defaultPrinterConfig);
+      await printer.connect(defaultPrinterConfig);
+      setPrinterStatus(printer.isConnected() ? 'Connected' : 'Disconnected');
+      Alert.alert('Printer', 'Printer connected successfully.');
+    } catch (e: any) {
+      Alert.alert('Printer Error', e.message);
+      setPrinterStatus('Disconnected');
+    } finally {
+      setPrinterConnecting(false);
+    }
+  };
+
+  const handleTestPrint = async () => {
+    try {
+      const printer = PrinterManager.getInstance();
+      if (!printer.isConnected()) {
+        Alert.alert('Printer', 'Silakan hubungkan printer terlebih dahulu.');
+        return;
+      }
+      await printer.testPrint();
+      Alert.alert('Printer', 'Test print command sent.');
+    } catch (e: any) {
+      Alert.alert('Printer Error', e.message);
+    }
+  };
+
+  const handleDisconnectPrinter = async () => {
+    try {
+      const printer = PrinterManager.getInstance();
+      await printer.disconnect();
+      setPrinterStatus('Disconnected');
+      Alert.alert('Printer', 'Printer disconnected.');
+    } catch (e: any) {
+      Alert.alert('Printer Error', e.message);
+    }
+  };

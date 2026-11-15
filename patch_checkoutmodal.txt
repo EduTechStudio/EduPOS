@@ -1,0 +1,60 @@
+  const [waitingVisible, setWaitingVisible] = useState(false);
+  const [pendingTxId, setPendingTxId] = useState<string | null>(null);
+  const [paymentResult, setPaymentResult] = useState<any | null>(null);
+
+  const handleConfirmPayment = async () => {
+    setErrorMsg(null);
+
+    if (paymentMethod === 'cash' && isUnderpaid) {
+      setErrorMsg('Uang pembayaran kurang.');
+      return;
+    }
+
+    const selectedMethodConfig = enabledMethods.find(m => m.id === paymentMethod);
+    if (!selectedMethodConfig?.isGateway && paymentMethod !== 'cash' && (!referenceNumber || referenceNumber.trim().length === 0)) {
+      setErrorMsg(`Kode referensi wajib diisi untuk pembayaran ${paymentMethod.toUpperCase()}`);
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const input = {
+        items: cart,
+        customer,
+        subtotal: totals.subtotal,
+        discountAmount: totals.discountAmount,
+        grandTotal: totals.grandTotal,
+        paymentMethod,
+        receivedAmount: paymentMethod === 'cash' ? receivedAmount : totals.grandTotal,
+        changeAmount: paymentMethod === 'cash' ? changeAmount : 0,
+        referenceNumber: paymentMethod === 'cash' ? null : referenceNumber,
+        notes,
+      };
+
+      if (selectedMethodConfig?.isGateway) {
+        const result = await checkoutService.createGatewayCheckoutIntent(input);
+        setPendingTxId(result.transactionId);
+        setPaymentResult(result.paymentResult);
+        setWaitingVisible(true);
+        setProcessing(false);
+        return;
+      }
+
+      const result = await checkoutService.processCheckout(input);
+      onCheckoutSuccess(result);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Transaksi gagal disimpan');
+      setProcessing(false);
+    }
+  };
+
+  const handleGatewaySuccess = (result: CheckoutResult) => {
+    setWaitingVisible(false);
+    onCheckoutSuccess(result);
+  };
+
+  const handleGatewayCancel = () => {
+    setWaitingVisible(false);
+    setPendingTxId(null);
+    setPaymentResult(null);
+  };

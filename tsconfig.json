@@ -8,6 +8,9 @@
       ],
       "@/assets/*": [
         "./assets/*"
+      ],
+      "bluetooth-printer": [
+        "./modules/bluetooth-printer"
       ]
     }
   },

@@ -1,0 +1,26 @@
+          {/* 5. Payment Methods */}
+          <SettingsSectionCard
+            icon="payment"
+            title="5. Payment Methods & Gateway"
+            subtitle="Configured checkout payment options"
+            badge={`${defaultPaymentMethods.length} Methods`}>
+            
+            <Text style={{ fontWeight: 'bold', marginBottom: 10, marginTop: 5 }}>Active Payment Gateway</Text>
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Provider</Text>
+              <Text style={styles.settingValue}>Mock Gateway</Text>
+            </View>
+            <View style={styles.settingRow}>
+              <Text style={styles.settingLabel}>Mode</Text>
+              <Badge label="DEVELOPMENT / MOCK" variant="warning" />
+            </View>
+            <View style={styles.divider} />
+
+            <Text style={{ fontWeight: 'bold', marginBottom: 10, marginTop: 5 }}>Manual & Gateway Methods</Text>
+            {defaultPaymentMethods.map((pm) => (
+              <View key={pm.id} style={styles.settingRow}>
+                <Text style={styles.settingLabel}>{pm.name} {pm.isGateway ? '(Gateway)' : '(Manual)'}</Text>
+                <Badge label={pm.enabled ? 'ACTIVE' : 'OFF'} variant={pm.enabled ? 'success' : 'default'} />
+              </View>
+            ))}
+          </SettingsSectionCard>

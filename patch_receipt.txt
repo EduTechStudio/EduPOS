@@ -1,0 +1,25 @@
+  const [printing, setPrinting] = useState(false);
+  const handlePrint = async () => {
+    if (!receiptData) return;
+    setPrinting(true);
+    try {
+      const { PrinterManager } = await import('@/services/printer/PrinterManager');
+      const printer = PrinterManager.getInstance();
+      if (!printer.isConnected()) {
+        import('react-native').then(({ Alert }) => {
+          Alert.alert('Printer Error', 'Printer tidak terhubung. Buka Pengaturan untuk menghubungkan printer.');
+        });
+        return;
+      }
+      await printer.printReceipt(receiptData);
+      import('react-native').then(({ Alert }) => {
+        Alert.alert('Sukses', 'Struk berhasil dicetak.');
+      });
+    } catch (e: any) {
+      import('react-native').then(({ Alert }) => {
+        Alert.alert('Gagal Mencetak', e.message);
+      });
+    } finally {
+      setPrinting(false);
+    }
+  };

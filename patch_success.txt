@@ -1,0 +1,19 @@
+  const [autoPrinted, setAutoPrinted] = React.useState(false);
+  
+  React.useEffect(() => {
+    if (visible && result?.receipt && !autoPrinted) {
+      import('@/config/defaultPrinterConfig').then(({ defaultPrinterConfig }) => {
+        if (defaultPrinterConfig.autoPrint) {
+          import('@/services/printer/PrinterManager').then(({ PrinterManager }) => {
+            const printer = PrinterManager.getInstance();
+            if (printer.isConnected()) {
+              printer.printReceipt(result.receipt!).catch((e) => {
+                Alert.alert('Gagal Auto-Print', e.message);
+              });
+            }
+          });
+        }
+      });
+      setAutoPrinted(true);
+    }
+  }, [visible, result, autoPrinted]);

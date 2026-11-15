@@ -1,0 +1,19 @@
+export type PaymentStatus = 'PENDING' | 'WAITING_FOR_PAYMENT' | 'PAID' | 'FAILED' | 'CANCELLED' | 'REFUNDED' | 'EXPIRED';
+
+export interface PaymentEntity {
+  id: string;
+  transaction_id: string;
+  payment_method: string;
+  amount: number;
+  received_amount: number;
+  change_amount: number;
+  reference_number: string | null;
+  status: PaymentStatus;
+  paid_at: string | null;
+  notes: string | null;
+  provider?: string | null;
+  gateway_payment_id?: string | null;
+  expires_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}

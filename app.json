@@ -1,9 +1,8 @@
 {
   "expo": {
-    "name": "store-pos-mobile",
+    "name": "EduPOS",
     "slug": "store-pos-mobile",
-    "version": "1.0.0",
-    "orientation": "portrait",
+    "version": "1.0.4",
     "icon": "./assets/images/icon.png",
     "scheme": "storeposmobile",
     "userInterfaceStyle": "automatic",
@@ -11,13 +10,23 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.storepos.mobile",
+      "versionCode": 5,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#064789",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.REQUEST_INSTALL_PACKAGES",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN"
+      ]
     },
     "web": {
       "output": "static",
@@ -28,15 +37,31 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#064789",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 180
         }
-      ]
+      ],
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Izinkan aplikasi mengakses kamera untuk memindai barcode produk.",
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "24b60e01-85a2-4d24-a6c9-e27e73e92b57"
+      }
+    },
+    "owner": "edutechs-team"
   }
 }

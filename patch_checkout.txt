@@ -1,0 +1,108 @@
+  async createGatewayCheckoutIntent(input: ProcessCheckoutInput): Promise<{ transactionId: string, paymentResult: any }> {
+    if (!input.items || input.items.length === 0) {
+      throw new Error('Keranjang belanja kosong');
+    }
+
+    const now = new Date().toISOString();
+    const ts = Date.now();
+    const txId = `tx_${ts}_${Math.floor(Math.random() * 1000)}`;
+    const txNumber = await generateTransactionNumber();
+
+    const { paymentService } = await import('@/services/payment/PaymentService');
+    const paymentResult = await paymentService.createGatewayPayment({
+      transactionId: txId,
+      transactionNumber: txNumber,
+      amount: input.grandTotal,
+      currency: 'IDR',
+      method: input.paymentMethod,
+      customerName: input.customer?.name
+    });
+
+    await withTransaction(async (db) => {
+      // Create transaction as PENDING
+      await db.runAsync(
+        `INSERT INTO transactions (id, transaction_number, customer_id, cashier_id, status, subtotal, discount_amount, tax_amount, total_amount, payment_status, notes, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'PENDING', ?, ?, 0, ?, 'WAITING_FOR_PAYMENT', ?, ?, ?);`,
+        [
+          txId, txNumber, input.customer?.id || null, input.cashierId || 'user_cashier',
+          input.subtotal, input.discountAmount, input.grandTotal, input.notes?.trim() || null, now, now,
+        ]
+      );
+
+      // Items snapshot
+      for (let i = 0; i < input.items.length; i++) {
+        const item = input.items[i];
+        const itemId = `ti_${txId}_${i + 1}`;
+        await db.runAsync(
+          `INSERT INTO transaction_items (id, transaction_id, product_id, product_name_snapshot, sku_snapshot, quantity, unit_price, discount_amount, subtotal, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?);`,
+          [
+            itemId, txId, item.productId, item.productName, item.sku,
+            item.quantity, item.unitPrice, item.subtotal, now,
+          ]
+        );
+      }
+
+      // Payment as WAITING_FOR_PAYMENT
+      const payId = `pay_${ts}_${Math.floor(Math.random() * 1000)}`;
+      await db.runAsync(
+        `INSERT INTO payments (id, transaction_id, payment_method, amount, received_amount, change_amount, reference_number, status, paid_at, notes, provider, gateway_payment_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'WAITING_FOR_PAYMENT', NULL, ?, ?, ?, ?, ?);`,
+        [
+          payId, txId, input.paymentMethod, input.grandTotal, 0, 0,
+          paymentResult.reference || null, null, 'mock', paymentResult.paymentId, now, now
+        ]
+      );
+    });
+
+    return { transactionId: txId, paymentResult };
+  }
+
+  async finalizeGatewayCheckout(transactionId: string): Promise<CheckoutResult> {
+    const now = new Date().toISOString();
+    return withTransaction(async (db) => {
+      const tx = await db.getFirstAsync<any>('SELECT * FROM transactions WHERE id = ?', [transactionId]);
+      if (!tx || tx.status === 'COMPLETED') throw new Error('Transaction already finalized or not found.');
+
+      const items = await db.getAllAsync<any>('SELECT * FROM transaction_items WHERE transaction_id = ?', [transactionId]);
+      const pay = await db.getFirstAsync<any>('SELECT * FROM payments WHERE transaction_id = ?', [transactionId]);
+
+      // Stock movements
+      for (const item of items) {
+        const latestProd = await db.getFirstAsync<any>('SELECT * FROM products WHERE id = ?;', [item.product_id]);
+        if (latestProd && latestProd.stock_tracking === 1) {
+          const newStock = latestProd.current_stock - item.quantity;
+          await db.runAsync('UPDATE products SET current_stock = ?, updated_at = ? WHERE id = ?;', [newStock, now, item.product_id]);
+          
+          await db.runAsync(
+            `INSERT INTO stock_movements (id, product_id, type, quantity, reference_id, notes, created_at)
+             VALUES (?, ?, 'SALE', ?, ?, ?, ?);`,
+            [`sm_${Date.now()}_${Math.floor(Math.random()*1000)}`, item.product_id, -item.quantity, transactionId, 'Penjualan Checkout', now]
+          );
+        }
+      }
+
+      await db.runAsync(`UPDATE transactions SET status = 'COMPLETED', payment_status = 'PAID', updated_at = ? WHERE id = ?;`, [now, transactionId]);
+      await db.runAsync(`UPDATE payments SET status = 'PAID', paid_at = ?, received_amount = amount, updated_at = ? WHERE id = ?;`, [now, now, pay.id]);
+
+      const updatedTx = await transactionRepository.getById(transactionId);
+      const updatedPay = await paymentRepository.getByTransactionId(transactionId);
+      const rData = await receiptService.buildReceiptDataFromDetail(updatedTx!);
+      return {
+        success: true,
+        transaction: updatedTx!.transaction,
+        items: updatedTx!.items,
+        payment: updatedPay[0],
+        movements: [],
+        receiptData: rData
+      };
+    });
+  }
+
+  async failGatewayCheckout(transactionId: string, status: 'FAILED' | 'CANCELLED' | 'EXPIRED'): Promise<void> {
+    const now = new Date().toISOString();
+    await withTransaction(async (db) => {
+      await db.runAsync(`UPDATE transactions SET status = 'CANCELLED', payment_status = ?, updated_at = ? WHERE id = ?;`, [status, now, transactionId]);
+      await db.runAsync(`UPDATE payments SET status = ?, updated_at = ? WHERE transaction_id = ?;`, [status, now, transactionId]);
+    });
+  }

@@ -1,98 +1,276 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler, ToastAndroid, Platform } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import { ScreenContainer } from '@/components/layout/ScreenContainer';
+import { ResponsiveContainer } from '@/components/layout/ResponsiveContainer';
+import { ResponsiveGrid } from '@/components/layout/ResponsiveGrid';
+import { SectionHeader } from '@/components/layout/SectionHeader';
+import { StatCard } from '@/components/ui/StatCard';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import {
+  reportService,
+  ReportSummary,
+  PaymentBreakdownItem,
+  TopProductItem,
+} from '@/services/report/ReportService';
+import { DateRangePreset } from '@/utils/dateRange';
+import { formatCurrency } from '@/utils/currency';
+import { theme, useTheme } from '@/theme';
+import { useAuth } from '@/context/AuthContext';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+export default function DashboardScreen() {
+  const { hasPermission } = useAuth();
+  const { colors } = useTheme();
+  const [dateRange, setDateRange] = useState<DateRangePreset>('today');
+  const [loading, setLoading] = useState(true);
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
+  const [summary, setSummary] = useState<ReportSummary | null>(null);
+  const [paymentBreakdown, setPaymentBreakdown] = useState<PaymentBreakdownItem[]>([]);
+  const [topProducts, setTopProducts] = useState<TopProductItem[]>([]);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [sumResult, payResult, topResult] = await Promise.allSettled([
+        reportService.getSummary({ dateRange }),
+        reportService.getPaymentBreakdown({ dateRange }),
+        reportService.getTopProducts({ dateRange }, 5),
+      ]);
+
+      if (sumResult.status === 'fulfilled') setSummary(sumResult.value);
+      if (payResult.status === 'fulfilled') setPaymentBreakdown(payResult.value);
+      if (topResult.status === 'fulfilled') setTopProducts(topResult.value);
+    } catch (error) {
+      console.error('[Dashboard] Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [dateRange]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
   );
-}
 
-export default function HomeScreen() {
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') return;
+
+      let lastBackPress = 0;
+      const onBackPress = () => {
+        const now = Date.now();
+        if (now - lastBackPress < 2000) {
+          BackHandler.exitApp();
+          return true;
+        }
+        lastBackPress = now;
+        ToastAndroid.show('Tekan sekali lagi untuk keluar', ToastAndroid.SHORT);
+        return true;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [])
+  );
+
+  const renderDatePresets = () => {
+    const presets: { label: string; value: DateRangePreset }[] = [
+      { label: 'Hari Ini', value: 'today' },
+      { label: 'Kemarin', value: 'yesterday' },
+      { label: '7 Hari', value: 'week' },
+      { label: 'Bulan Ini', value: 'month' },
+      { label: 'Bulan Lalu', value: 'last_month' },
+      { label: 'Semua Waktu', value: 'all' },
+    ];
+
+    return (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+        {presets.map((p) => {
+          const active = dateRange === p.value;
+          return (
+            <TouchableOpacity
+              key={p.value}
+              activeOpacity={0.75}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: active ? colors.primary : colors.surface,
+                  borderColor: active ? colors.primary : colors.border,
+                },
+              ]}
+              onPress={() => setDateRange(p.value)}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  { color: active ? colors.textInverse : colors.textSecondary },
+                ]}
+              >
+                {p.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    );
+  };
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
+    <ScreenContainer scrollable={false}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <ResponsiveContainer>
+          <SectionHeader
+            title="Beranda"
+            subtitle="Ringkasan performa dan penjualan bisnis"
+            rightElement={loading ? <Badge label="Memuat..." variant="info" /> : <Badge label="Aktif" variant="success" />}
           />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+          {renderDatePresets()}
+
+          <SectionHeader title="Ringkasan Penjualan" subtitle="Performa penjualan untuk periode yang dipilih" style={{ marginTop: theme.spacing.lg }} />
+          <ResponsiveGrid minColumnWidth={220} gap={theme.spacing.md}>
+            <StatCard
+              title="Penjualan Kotor"
+              value={formatCurrency(summary?.grossSales || 0)}
+              iconName="dashboard"
+            />
+            <StatCard
+              title="Penjualan Bersih"
+              value={formatCurrency((summary?.grossSales || 0) - (summary?.totalDiscount || 0))}
+              trend={`Diskon: ${formatCurrency(summary?.totalDiscount || 0)}`}
+              iconName="transactions"
+            />
+            <StatCard
+              title="Transaksi Selesai"
+              value={summary?.completedCount || 0}
+              iconName="customers"
+            />
+            <StatCard
+              title="Rata-rata Transaksi"
+              value={formatCurrency(summary?.avgBasketSize || 0)}
+              iconName="reports"
+            />
+          </ResponsiveGrid>
+
+          <SectionHeader title="Analisis Pembayaran" subtitle="Rincian penerimaan berdasarkan metode pembayaran" style={{ marginTop: theme.spacing.xl }} />
+          <Card variant="standard" style={{ padding: theme.spacing.md }}>
+            {paymentBreakdown.length === 0 ? (
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>Belum ada data pembayaran untuk periode ini.</Text>
+            ) : (
+              paymentBreakdown.map((item, index) => (
+                <View
+                  key={item.paymentMethod}
+                  style={[
+                    styles.listItem,
+                    index > 0 && [styles.listBorder, { borderTopColor: colors.border }],
+                  ]}
+                >
+                  <View>
+                    <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{item.paymentMethod.toUpperCase()}</Text>
+                    <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{item.transactionCount} transaksi ({item.percentage}%)</Text>
+                  </View>
+                  <Text style={[styles.itemValue, { color: colors.textPrimary }]}>{formatCurrency(item.totalAmount)}</Text>
+                </View>
+              ))
+            )}
+          </Card>
+
+          <SectionHeader title="Performa Produk" subtitle="Produk terlaris pada periode ini" style={{ marginTop: theme.spacing.xl }} />
+          <Card variant="standard" style={{ padding: theme.spacing.md }}>
+            {topProducts.length === 0 ? (
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>Belum ada penjualan produk untuk periode ini.</Text>
+            ) : (
+              topProducts.map((item, index) => (
+                <View
+                  key={item.productId || index}
+                  style={[
+                    styles.listItem,
+                    index > 0 && [styles.listBorder, { borderTopColor: colors.border }],
+                  ]}
+                >
+                  <View>
+                    <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{item.productName}</Text>
+                    <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{item.quantitySold} terjual</Text>
+                  </View>
+                  <Text style={[styles.itemValue, { color: colors.primary }]}>{formatCurrency(item.totalRevenue)}</Text>
+                </View>
+              ))
+            )}
+          </Card>
+
+          <SectionHeader title="Statistik Transaksi" subtitle="Status dan agregat penjualan" style={{ marginTop: theme.spacing.xl }} />
+          <ResponsiveGrid minColumnWidth={220} gap={theme.spacing.md}>
+            <StatCard
+              title="Total Transaksi"
+              value={summary?.totalTransactions || 0}
+              iconName="transactions"
+            />
+            <StatCard
+              title="Produk Terjual"
+              value={summary?.totalItemsSold || 0}
+              iconName="products"
+            />
+            <StatCard
+              title="Dibatalkan (Void)"
+              value={summary?.cancelledCount || 0}
+              iconName="reports"
+            />
+            <StatCard
+              title="Dikembalikan (Refund)"
+              value={summary?.refundedCount || 0}
+              iconName="reports"
+            />
+          </ResponsiveGrid>
+          <View style={{ height: 40 }} />
+        </ResponsiveContainer>
+      </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
+  chipRow: {
     flexDirection: 'row',
+    marginBottom: theme.spacing.md,
+    marginTop: theme.spacing.sm,
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
+  chip: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    borderRadius: theme.radius.full,
+    marginRight: theme.spacing.sm,
+    borderWidth: 1,
+  },
+  chipText: {
+    ...theme.typography.caption,
+    fontWeight: '600',
+  },
+  listItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    paddingVertical: theme.spacing.sm,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  listBorder: {
+    borderTopWidth: 1,
   },
-  title: {
+  itemTitle: {
+    ...theme.typography.bodyMedium,
+    fontWeight: '600',
+  },
+  itemSubtitle: {
+    ...theme.typography.caption,
+    marginTop: 2,
+  },
+  itemValue: {
+    ...theme.typography.bodyMedium,
+    fontWeight: '700',
+  },
+  emptyText: {
+    ...theme.typography.bodyMedium,
     textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+    padding: theme.spacing.md,
   },
 });

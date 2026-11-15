@@ -1,0 +1,25 @@
+import { ReceiptConfig } from '@/types/receipt';
+
+export const defaultReceiptConfig: ReceiptConfig = {
+  storeName: 'Store POS Cafe & Retail',
+  storeAddress: 'Jl. Utama Business Center No. 88, Jakarta',
+  storePhone: '+62 812-3456-7890',
+  logo: undefined,
+  showHeader: true,
+  showStoreAddress: true,
+  showStorePhone: true,
+  showLogo: true,
+  showFooter: true,
+  footerText: 'Thank you for your visit! Please come again.',
+  showCashier: true,
+  showTransactionNumber: true,
+  showDateTime: true,
+  showCustomer: true,
+  showPaymentMethod: true,
+  showDiscount: true,
+  showTax: true,
+  showSubtotal: true,
+  showTotal: true,
+  showChange: true,
+  receiptWidth: '80mm',
+};

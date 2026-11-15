@@ -1,0 +1,13 @@
+      const { transactionService } = await import('@/services/transaction/TransactionService');
+      const updatedTxDetail = await transactionService.getTransactionDetail(transactionId);
+      if (!updatedTxDetail) throw new Error('Transaction detail not found.');
+
+      const rData = await receiptService.buildReceiptDataFromDetail(updatedTxDetail);
+      return {
+        success: true,
+        transaction: updatedTxDetail.transaction,
+        items: updatedTxDetail.items,
+        payment: updatedTxDetail.payments[0],
+        movements: [],
+        receiptData: rData
+      };
